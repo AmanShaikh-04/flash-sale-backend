@@ -1,0 +1,31 @@
+{
+  "name": "flash-sale-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "description": "Flash-sale backend load-tested to 1M requests with zero overselling (Redis, Kubernetes, Terraform, AWS)",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmanShaikh-04/flash-sale-backend.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/AmanShaikh-04/flash-sale-backend/issues"
+  },
+  "homepage": "https://github.com/AmanShaikh-04/flash-sale-backend#readme",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
