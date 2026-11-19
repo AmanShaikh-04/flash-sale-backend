@@ -1,9 +1,22 @@
+# Infra only by default:      docker compose up -d
+# Infra + api + worker:       docker compose --profile app up -d --build
+
+x-app-env: &app-env
+  REDIS_URL: redis://redis:6379
+  DATABASE_URL: postgres://flash:flash@postgres:5432/flashsale
+  SQS_ENDPOINT: http://elasticmq:9324
+
 services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
 
   postgres:
     image: postgres:16-alpine
@@ -13,9 +26,44 @@ services:
       POSTGRES_DB: flashsale
     ports:
       - "5432:5432"
+    volumes:
+      # applied automatically on first start, so no manual psql step after "down"
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flash -d flashsale"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
 
   elasticmq:
     image: softwaremill/elasticmq-native
     ports:
       - "9324:9324"   # SQS API
       - "9325:9325"   # web UI
+
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      target: api
+    ports:
+      - "3000:3000"
+    environment: *app-env
+    # the app exits if ElasticMQ is not ready yet; retry instead of staying down
+    restart: on-failure
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      elasticmq: { condition: service_started }
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      target: worker
+    environment: *app-env
+    restart: on-failure
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      elasticmq: { condition: service_started }
