@@ -11,7 +11,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint ."
   },
   "repository": {
     "type": "git",
@@ -24,8 +26,11 @@
   },
   "homepage": "https://github.com/AmanShaikh-04/flash-sale-backend#readme",
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "@types/node": "^26.6.6",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "tsx": "^4.23.15"
   }
 }
