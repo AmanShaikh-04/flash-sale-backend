@@ -1,0 +1,12 @@
+# Local cluster for Phase 3. One node is enough: it runs the control plane and all pods.
+# Create with:  kind create cluster --config deploy/kind/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: flash-sale
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # api Service (NodePort 30080) is reachable from the laptop at http://localhost:8080
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP

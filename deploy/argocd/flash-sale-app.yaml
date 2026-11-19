@@ -1,0 +1,25 @@
+# Argo CD Application: keeps the cluster in sync with deploy/helm/flash-sale on the main branch.
+# Apply once with:  kubectl apply -f deploy/argocd/flash-sale-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flash-sale
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AmanShaikh-04/flash-sale-backend.git
+    targetRevision: main
+    path: deploy/helm/flash-sale
+    helm:
+      valueFiles:
+        - values-kind.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flash-sale
+  syncPolicy:
+    automated:
+      prune: true       # delete resources that were removed from git
+      selfHeal: true    # undo manual changes made with kubectl
+    syncOptions:
+      - CreateNamespace=true
