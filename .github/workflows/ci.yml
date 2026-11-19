@@ -67,6 +67,22 @@ jobs:
           docker run --rm -i --network host -e TOTAL=1000 -e VUS=50 \
             grafana/k6 run - < scripts/k6-buy.js
 
+      - name: Closing wave (keep buyers coming until sold out)
+        run: |
+          # A failed payment can release a unit after the burst ends. A real sale keeps taking
+          # buyers until it is sold out, so send paced buyers until stock stays at 0.
+          zero=0
+          for i in $(seq 1 100); do
+            stock=$(curl -sf http://localhost:3000/stock | jq -r .stock)
+            if [ "$stock" = "0" ]; then zero=$((zero+1)); else zero=0; fi
+            [ "$zero" -ge 3 ] && break
+            curl -s -o /dev/null -X POST http://localhost:3000/buy \
+              -H 'Content-Type: application/json' \
+              -d "{\"userId\":\"closer$i\",\"idempotencyKey\":\"closer-$i\"}"
+            sleep 0.3
+          done
+          curl -sf http://localhost:3000/stock
+
       - name: Let the worker drain the queue
         run: sleep 15
 
