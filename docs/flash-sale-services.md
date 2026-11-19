@@ -1,6 +1,16 @@
 # Flash-Sale Ticket / Sneaker Drop: Final Service List
 
+Last updated: 20 Nov 2026
+
 **Language:** Node.js (TypeScript) | **Region:** ap-south-1 (Mumbai) | **Starting stock:** N = 10,000
+
+## Build status (20 Nov 2026)
+
+**Built and verified locally (Phase 1):** Redis (atomic Lua stock, reservations, idempotency), PostgreSQL (orders), SQS API via ElasticMQ, dead-letter queue, idempotency keys, fake payment service, worker, k6 load test, verification script. Docker Compose runs Redis, Postgres and ElasticMQ.
+
+**Next (Phase 2):** Docker images for the app and worker, GitHub Actions, GHCR.
+
+**Not started:** everything else (Kubernetes, Terraform, AWS services, edge layers, observability).
 
 ## Foundation
 - Terraform CLI with an S3 backend (IaC, no HCP Terraform)
@@ -21,21 +31,22 @@
 - Waiting room / virtual queue (fair entry, built on Redis)
 
 ## Data
-- Redis (atomic stock counter + reservation TTL, runs in-cluster)
-- PostgreSQL / RDS (confirmed orders)
+- Redis (atomic stock counter + reservation TTL, runs in-cluster) *(built locally)*
+- PostgreSQL / RDS (confirmed orders) *(built locally)*
 - PgBouncer / RDS Proxy (connection pooling)
 - OpenSearch (typo-tolerant catalog search)
 - S3 (product images, and the Terraform state bucket)
 
 ## Async Processing
-- **SQS** (task queue, chosen first; ElasticMQ or LocalStack locally)
-- Dead-letter queue (failed messages)
+- **SQS** (task queue, chosen first; ElasticMQ locally) *(built locally)*
+- Dead-letter queue (failed messages) *(built locally)*
 - Kafka / MSK (events, analytics, optional)
 - RabbitMQ (later experiment after the 1M proof, behind the same queue interface)
 
 ## Payments
 - Razorpay or Stripe (with webhooks)
-- Idempotency keys on `/buy` (no duplicate orders)
+- Fake payment service (80% success), the fallback, currently in use *(built locally)*
+- Idempotency keys on `/buy` (no duplicate orders) *(built locally)*
 
 ## Delivery
 - CI/CD (GitHub Actions, public repo)
@@ -52,7 +63,8 @@
 - Alertmanager (alerts)
 
 ## Testing
-- k6 (load test)
+- k6 (load test) *(built locally)*
+- `seed.ts` and `verify.ts` (reset and check the success metric) *(built locally)*
 
 > SES (emails) was removed. There are no real users, so no emails are needed.
 
@@ -60,16 +72,17 @@
 
 ## Core Flow
 1. User -> Route 53 -> CloudFront/WAF -> ALB -> backend pods
-2. Backend runs atomic Redis `DECR` on stock; rejects if below 0
-3. Redis holds a reservation with TTL; stock is released if payment fails
-4. Order is pushed to SQS (and Kafka, if kept)
-5. Workers write the confirmed order to PostgreSQL, then handle invoice and analytics (no email step)
+2. Backend runs one atomic Redis Lua script: checks the idempotency key, decrements stock **only if stock > 0** (never a bare `DECR`), and creates a reservation with a TTL
+3. Fake payment runs. If it fails, or the reservation expires, stock is returned to Redis exactly once
+4. On success the order is pushed to SQS (and Kafka, if kept)
+5. Workers write the confirmed order to PostgreSQL (`ON CONFLICT DO NOTHING`), then handle invoice and analytics (no email step)
 
 ## Build Order
-1. Core locally with Docker Compose (app, Redis, Postgres, SQS emulator)
-2. Kubernetes + Helm + Argo CD
-3. Terraform + cloud services
-4. Edge, security and payments
-5. Observability
-6. k6 load test to prove no overselling
-7. Optional: RabbitMQ experiment and write-up
+1. Core locally with Docker Compose (app, Redis, Postgres, SQS emulator) **(done)**
+2. Docker images and CI/CD **(next)**
+3. Kubernetes + Helm + Argo CD
+4. Terraform + cloud services
+5. Edge, security and payments
+6. Observability
+7. k6 load test to prove no overselling
+8. Optional: RabbitMQ experiment and write-up

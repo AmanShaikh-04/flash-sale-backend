@@ -1,5 +1,12 @@
 # Flash-Sale Backend: Project Overview
 
+Last updated: 20 Nov 2026
+
+## Progress
+- Phase 0 (prep): done, except the pending EC2 vCPU quota approval.
+- Phase 1 (core app, local): **done**. 50,000 requests, exactly 10,000 confirmed orders, no overselling, no duplicates, queue and DLQ empty. See `docs/decisions.md` for the numbers.
+- Next: Phase 2 (Dockerfiles, GitHub Actions, GHCR). Full plan in `docs/flash-sale-roadmap.md`.
+
 ## 1. Goal
 
 Prove that a flash-sale backend (ticket / sneaker drop) can handle **1 million requests with no overselling**.
@@ -14,16 +21,21 @@ Prove that a flash-sale backend (ticket / sneaker drop) can handle **1 million r
 | Decision | Reason |
 |---|---|
 | **Node.js (TypeScript)** | Async I/O suits a Redis-heavy `/buy` endpoint, and needs fewer pods for the same throughput |
+| **Fastify 5 + ioredis 6** | Low overhead web framework, and a Redis client that supports Lua scripts |
+| **Stock reserved by a Lua script, not a bare `DECR`** | A bare `DECR` briefly drives stock to -1. The script decrements only if stock > 0, so stock is never below 0 |
 | **Region: ap-south-1 (Mumbai)** | Chosen at account setup. Use it for everything, including quota requests |
 | **Public GitHub repo** | Free, unlimited Actions minutes, and works as a portfolio piece |
-| **Queue: SQS first** | Managed, built-in dead-letter queue, nothing to run. Local emulator (ElasticMQ / LocalStack) in Docker Compose |
-| **RabbitMQ later** | Optional experiment after the 1M proof. Keep queue code behind a small interface so it can be swapped |
+| **Queue: SQS first** | Managed, built-in dead-letter queue, nothing to run. ElasticMQ (SQS-compatible) in Docker Compose |
+| **Queue behind a `Queue` interface** | `publish()` and `consume()` in `packages/shared`, so RabbitMQ can be swapped in later |
+| **RabbitMQ later** | Optional experiment after the 1M proof |
 | **Terraform CLI + S3 backend** | Free apart from pennies. HCP Terraform is not used (its free tier is being discontinued) |
 | **SES removed** | No real users, so no emails are needed. Nothing in the load test depends on it |
 | **Everything else kept** | Useful for showing the full architecture and operations |
 | **Non-core services marked KEEP** | If one fights back, skip it using the fallback. The main goal still stands |
 | **Own waiting room on Redis** | Cloudflare Waiting Room needs the Business plan ($200/month) and CrowdHandler Starter is $190/month. A custom queue is free and a better design showcase |
 | **Run Redis in the cluster** | Free hosted Redis tiers are too small for the load test (see section 5) |
+| **Fake payment service for now** | 50-150 ms delay, about 80% success. Razorpay test mode is a later KEEP item |
+| **Local Compose runs infra only** | Redis, Postgres and ElasticMQ in Compose. API and worker run on the host until Phase 2 |
 
 ## 3. Services
 
@@ -43,21 +55,21 @@ CORE = the test fails or means nothing without it. KEEP = build it, but skip it 
 - KEEP: Route 53 and ACM (fallback: use the ALB's own URL)
 
 ### Data
-- CORE: Redis (atomic stock counter plus reservation TTL), run in-cluster
-- CORE: PostgreSQL / RDS (confirmed orders)
+- CORE: Redis (atomic stock counter plus reservation TTL), run in-cluster *(built locally)*
+- CORE: PostgreSQL / RDS (confirmed orders) *(built locally)*
 - KEEP: PgBouncer / RDS Proxy (fallback: app-side pool)
 - KEEP: OpenSearch (not on the buy path, fully skippable)
 - KEEP: S3 (not needed for the test, apart from the Terraform state bucket)
 
 ### Async processing
-- CORE: SQS (task queue)
-- CORE: Dead-letter queue
+- CORE: SQS (task queue) *(built locally with ElasticMQ)*
+- CORE: Dead-letter queue *(built locally)*
 - KEEP: Kafka / MSK (fallback: SQS only; needs the Paid plan)
 - OPTIONAL: RabbitMQ experiment after the 1M proof
 
 ### Payments
-- CORE: Idempotency keys on `/buy`
-- KEEP: Razorpay in test mode with webhooks (fallback: fake payment service that randomly succeeds or fails)
+- CORE: Idempotency keys on `/buy` *(built locally)*
+- KEEP: Razorpay in test mode with webhooks (fallback: fake payment service that randomly succeeds or fails, **currently in use**)
 
 ### Delivery
 - CORE: CI/CD (GitHub Actions), ECR
@@ -69,15 +81,15 @@ CORE = the test fails or means nothing without it. KEEP = build it, but skip it 
 - KEEP: OpenTelemetry, Jaeger, Loki, Alertmanager
 
 ### Testing
-- CORE: k6, run from inside AWS
+- CORE: k6, run from inside AWS *(local k6 script built and passing)*
 
 ## 4. Core flow
 
 1. User goes (Route 53 -> CloudFront/WAF, if kept) -> ALB -> backend pods.
-2. Backend runs an atomic Redis `DECR` on stock and rejects if it goes below 0.
-3. Redis holds a reservation with a TTL, and stock is released if payment fails.
-4. The order is pushed to SQS (and Kafka, if kept).
-5. Workers write the confirmed order to PostgreSQL, then handle invoice and analytics. There is no email step.
+2. Backend runs one atomic Redis Lua script: it checks the idempotency key, decrements stock **only if stock > 0**, and creates a reservation with a TTL.
+3. A fake payment runs. If it fails, or the reservation expires, stock is returned to Redis exactly once (release is also atomic).
+4. On success the order is pushed to SQS (and Kafka, if kept).
+5. Workers write the confirmed order to PostgreSQL, then handle invoice and analytics. There is no email step. A unique constraint on the idempotency key makes duplicates harmless.
 
 ## 5. Free vs paid (non-AWS)
 
@@ -148,13 +160,14 @@ A 48-hour window is about $50, and the 1M-request test itself adds only a few do
 
 ## 7. Build and run plan
 
-1. **Local first:** core on Docker Compose (app, Redis, Postgres, SQS emulator). Cost: $0.
-2. **Local Kubernetes:** Kubernetes, Helm and Argo CD on a local cluster (kind or k3d). Cost: $0.
-3. **AWS smoke test:** bring the stack up with Terraform for a couple of hours, run 50-100k requests, fix problems, then destroy.
-4. **Edge, security and payments:** add WAF, CloudFront, queue and payments as time allows.
-5. **Observability:** Prometheus, Grafana, and the optional tracing, logging and alerting tools.
-6. **Final run:** bring the stack up again, run k6 at 1M requests, prove no overselling, capture dashboards, then `terraform destroy`.
-7. **Optional:** RabbitMQ experiment and write-up.
+1. **Local first:** core on Docker Compose infra (Redis, Postgres, SQS emulator) with the app and worker on the host. Cost: $0. **Done.**
+2. **Containers and CI/CD:** Dockerfiles, GitHub Actions, GHCR. Cost: $0. **Next.**
+3. **Local Kubernetes:** Kubernetes, Helm and Argo CD on a local cluster (kind or k3d). Cost: $0.
+4. **AWS smoke test:** bring the stack up with Terraform for a couple of hours, run 50-100k requests, fix problems, then destroy.
+5. **Edge, security and payments:** add WAF, CloudFront, queue and payments as time allows.
+6. **Observability:** Prometheus, Grafana, and the optional tracing, logging and alerting tools.
+7. **Final run:** bring the stack up again, run k6 at 1M requests, prove no overselling, capture dashboards, then `terraform destroy`.
+8. **Optional:** RabbitMQ experiment and write-up.
 
 ## 8. Checklist before the final run
 
@@ -173,6 +186,7 @@ A 48-hour window is about $50, and the 1M-request test itself adds only a few do
 - The about-5-worker-node count is an assumption.
 - The EC2 vCPU quota increase (5 to 32) is pending.
 - Prices are from third-party summaries of AWS pricing pages and may differ slightly from the live pages.
+- Local results (about 4,170 requests/s on one laptop, with k6 and the app on the same machine) do not predict AWS throughput. Pod count, Redis and DB limits must be measured in Phases 4 and 7.
 
 ## 10. Sources
 

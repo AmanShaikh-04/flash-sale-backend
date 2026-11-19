@@ -1,5 +1,7 @@
 # Flash-Sale Backend: Phased Roadmap
 
+Last updated: 20 Nov 2026
+
 **Goal:** prove the backend handles **1 million requests with no overselling**.
 **Rule of thumb:** finish each phase's exit criteria before starting the next. CORE items are mandatory. KEEP items are built if time allows, otherwise use the fallback.
 
@@ -7,21 +9,21 @@
 
 ## Map at a glance
 
-| Phase | Name | Where | AWS cost | Main outcome |
-|---|---|---|---|---|
-| 0 | Prep and decisions | Laptop + AWS console | $0 | Accounts, budget alert, quota check |
-| 1 | Core app, local | Docker Compose | $0 | `/buy` works with zero oversell locally |
-| 2 | CI/CD and images | GitHub Actions | $0 | Every push builds and tests images |
-| 3 | Kubernetes, local | kind / k3d | $0 | Helm, HPA and Argo CD working |
-| 4 | Terraform + AWS smoke test | AWS (hours) | Low | 50-100k requests pass, then destroy |
-| 5 | Edge, security, payments | AWS | Low | Full request path hardened |
-| 6 | Observability | Local + AWS | Low | Dashboards ready for evidence |
-| 7 | Dress rehearsal and pre-flight | AWS | Moderate | Final-run checklist all green |
-| 8 | Final run, evidence, teardown | AWS | About $50 | 1M requests, proof captured, all destroyed |
+| Phase | Name | Where | AWS cost | Main outcome | Status |
+|---|---|---|---|---|---|
+| 0 | Prep and decisions | Laptop + AWS console | $0 | Accounts, budget alert, quota check | Done (quota approval pending) |
+| 1 | Core app, local | Docker Compose (infra) + host | $0 | `/buy` works with zero oversell locally | **Done** |
+| 2 | CI/CD and images | GitHub Actions | $0 | Every push builds and tests images | **Next** |
+| 3 | Kubernetes, local | kind / k3d | $0 | Helm, HPA and Argo CD working | Not started |
+| 4 | Terraform + AWS smoke test | AWS (hours) | Low | 50-100k requests pass, then destroy | Not started |
+| 5 | Edge, security, payments | AWS | Low | Full request path hardened | Not started |
+| 6 | Observability | Local + AWS | Low | Dashboards ready for evidence | Not started |
+| 7 | Dress rehearsal and pre-flight | AWS | Moderate | Final-run checklist all green | Not started |
+| 8 | Final run, evidence, teardown | AWS | About $50 | 1M requests, proof captured, all destroyed | Not started |
 
 ---
 
-## Phase 0: Prep and decisions (IN PROGRESS)
+## Phase 0: Prep and decisions (DONE, one item pending)
 
 **Objective:** remove blockers before writing code.
 
@@ -32,44 +34,63 @@
 - [x] Decide the Terraform backend: **S3 backend** (no HCP Terraform).
 - [x] Look up service quotas: EC2 On-Demand Standard vCPUs was 5, **requested 32** (pending). If denied, upgrade to Paid and re-request. API Gateway throttling still to check.
 - [x] Define the **success metric**: N = 10,000, so confirmed orders must equal 10,000 exactly, and stock must never go below 0.
-- [ ] Commit `docs/decisions.md` and these docs to the repo.
-- [ ] Confirm the vCPU quota increase is approved.
+- [x] Commit `docs/decisions.md` and these docs to the repo.
+- [ ] Confirm the vCPU quota increase is approved. (Needed before Phase 4.)
 
 **Exit criteria:** budget alert active, repo created, decisions written down, quota increase approved or Paid-plan fallback done.
 
 ---
 
-## Phase 1: Core app on Docker Compose (CORE)
+## Phase 1: Core app, local (DONE)
 
 **Objective:** a working buy flow with correct stock handling on your laptop.
 
-- [ ] Backend app (Node.js / TypeScript) with `/buy`
-- [ ] Redis atomic `DECR` stock counter. Reject when stock goes below 0.
-- [ ] Reservation with TTL. Release stock if payment fails or the TTL expires.
-- [ ] **Idempotency keys** on `/buy` (no duplicate orders)
-- [ ] Queue: **SQS-compatible** (ElasticMQ or LocalStack) plus a **dead-letter queue**, behind a small queue interface
-- [ ] Worker writes confirmed orders to PostgreSQL
-- [ ] Fake payment service that randomly succeeds or fails (the fallback is fine for now)
-- [ ] k6 script, plus a small **verification script** that checks: orders in Postgres == stock sold, no negative stock, no duplicate idempotency keys
+Docker Compose runs the infrastructure (Redis, Postgres, ElasticMQ). The API and worker run on the host with `tsx`. They get containerised in Phase 2.
 
-**Exit criteria:** local k6 run (e.g. 10-50k requests, stock N = 10,000) shows zero overselling and zero duplicate orders, and failed payments return stock.
+- [x] Repo scaffold: npm workspaces (`apps/api`, `apps/worker`, `packages/shared`, `scripts/`), TypeScript, `tsx`
+- [x] `docker-compose.yml` with Redis 7, Postgres 16 and ElasticMQ
+- [x] Postgres `orders` table with `UNIQUE(idempotency_key)` (`db/schema.sql`)
+- [x] Backend app (Node.js / TypeScript, Fastify) with `POST /buy` and `GET /stock`
+- [x] Atomic stock handling in a **Lua script** (reserve only if stock > 0, never a bare `DECR`)
+- [x] Reservation with 60 s TTL. Stock is released if payment fails, and a reaper returns stock for expired reservations
+- [x] **Idempotency keys** on `/buy` (Redis fast path, Postgres UNIQUE as last line of defence)
+- [x] Queue behind a small `Queue` interface, SQS implementation against ElasticMQ, plus `orders-dlq` (`maxReceiveCount` 3)
+- [x] Worker writes confirmed orders to PostgreSQL (`ON CONFLICT DO NOTHING`, ack after insert)
+- [x] Fake payment service (50-150 ms, about 80% success)
+- [x] `scripts/seed.ts` (reset stock, orders and queues) and `scripts/verify.ts` (7 checks)
+- [x] `scripts/k6-buy.js` with unique keys per user and retries with the same key
+
+**Results (local, one laptop):**
+
+| Run | Requests | Stock | Confirmed | Result |
+|---|---|---|---|---|
+| 1 | 1,000 | 100 | 100 | All 7 checks passed |
+| 2 | 10,000 | 2,000 | 2,000 | All 7 checks passed |
+| 3 | 50,000 | 10,000 | 10,000 | All 7 checks passed |
+
+Run 3: 0% failed requests, about 4,170 requests/s, p95 about 161 ms, 2,556 failed payments (all stock returned), 981 idempotent retries, final stock 0, no duplicates, queue and DLQ empty.
+
+**Exit criteria (met):** zero overselling, zero duplicate orders, and failed payments return stock.
+
+**Known limits:** one API process on one laptop. k6 and the app share the same machine. The fake payment is not a real gateway.
 
 ---
 
-## Phase 2: Containers and CI/CD (CORE)
+## Phase 2: Containers and CI/CD (CORE) (DONE)
 
 **Objective:** automated, repeatable builds.
 
-- [ ] Production Dockerfiles for the app and the worker
-- [ ] GitHub Actions: lint, test, build image on every push (public repo, so minutes are free)
-- [ ] Push images to a registry. Use GHCR for now, and switch to **ECR** (ap-south-1) in Phase 4.
-- [ ] Avoid Docker Hub pull limits by pushing your own images
+- [x] Production Dockerfile for the app and the worker (one multi-target file: `api` and `worker`)
+- [x] App and worker added to Docker Compose behind an `app` profile, configured through environment variables (`REDIS_URL`, `DATABASE_URL`, `SQS_ENDPOINT`)
+- [x] GitHub Actions: typecheck, lint, smoke test (compose + 1,000 requests + `verify.ts`), build and push
+- [x] Images pushed to GHCR (`ghcr.io/amanshaikh-04/flash-sale-api` and `flash-sale-worker`, public). Switch to **ECR** (ap-south-1) in Phase 4.
+- [x] Docker Hub pull limits avoided by pushing our own images
 
-**Exit criteria:** a push to `main` produces tested, tagged images automatically.
+**Results:** first CI run on `main` passed in 2m 12s (check, smoke, publish for api and worker). Local container run: 1,000 requests, stock 100, all 7 verify checks passed.
 
----
+**Exit criteria (met):** a push to `main` produces tested, tagged images automatically.
 
-## Phase 3: Kubernetes on a local cluster
+## Phase 3: Kubernetes on a local cluster (NEXT)
 
 **Objective:** prove the K8s setup at zero cost before touching AWS.
 
@@ -100,6 +121,7 @@
 **Exit criteria:** smoke test passes with no overselling, the stack comes up and tears down cleanly from Terraform alone, and measured cost matches expectations (about $1/hour with everything running; Mumbai may be slightly higher).
 
 > Tip: keep sessions short. Bring it up, test for a couple of hours, and destroy.
+> Note: `verify.ts` and `seed.ts` currently use localhost endpoints and the ElasticMQ queue URL. They need environment variables for the AWS endpoints (Redis, RDS, SQS) before this phase.
 
 ---
 
@@ -112,7 +134,7 @@
 | 1 | **Waiting room / virtual queue** on Redis (best design showcase) | Plain rate limit |
 | 2 | **PgBouncer / RDS Proxy** (relevant to DB connection load) | App-side pool |
 | 3 | **WAF**, with the k6 generator allowlisted | None needed |
-| 4 | **Razorpay test mode** + webhooks (confirm test mode is free first) | Fake payment service |
+| 4 | **Razorpay test mode** + webhooks (confirm test mode is free first) | Fake payment service (already built) |
 | 5 | **Secrets Manager** | Kubernetes secrets |
 | 6 | **API Gateway** rate limiting | App or ALB rate limit |
 | 7 | **CloudFront**, **Route 53**, **ACM** | Test straight against the ALB URL |
@@ -232,3 +254,4 @@ The project is done when a 1M-request k6 run from inside AWS produces **exactly 
 - The about-5-worker-node count is an assumption.
 - AWS prices came from third-party summaries and may differ slightly from the live pages.
 - The EC2 vCPU quota increase (5 to 32) is pending approval.
+- Local throughput (about 4,170 requests/s on one laptop) says nothing yet about AWS. The 1M run depends on pod count, Redis and DB limits, to be measured in Phases 4 and 7.
