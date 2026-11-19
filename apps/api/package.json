@@ -1,0 +1,12 @@
+{
+  "name": "@flash/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.12.8",
+    "ioredis": "^6.0.0"
+  }
+}
