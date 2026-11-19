@@ -1,0 +1,81 @@
+# Default values. values-kind.yaml overrides some of these for the local kind cluster.
+
+image:
+  tag: latest             # always pin to a sha-xxxxxxx tag in the env-specific values file
+  pullPolicy: IfNotPresent
+
+# Connection settings. Leave empty to use the in-cluster services below.
+# On AWS (Phase 4) these point at RDS and real SQS instead.
+config:
+  redisUrl: ""
+  databaseUrl: ""
+  sqsEndpoint: ""
+
+api:
+  image: ghcr.io/amanshaikh-04/flash-sale-api
+  replicas: 2             # ignored when hpa.enabled is true
+  service:
+    type: ClusterIP
+    nodePort: null
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+worker:
+  image: ghcr.io/amanshaikh-04/flash-sale-worker
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  scaleDownStabilizationSeconds: 60   # Kubernetes default is 300. Shorter makes the demo easier to watch.
+
+# In-cluster backing services (local testing). Turn off the ones AWS provides in Phase 4.
+redis:
+  enabled: true
+  image: redis:7-alpine
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  user: flash
+  password: flash         # throwaway local credential
+  database: flashsale
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+elasticmq:
+  enabled: true
+  image: softwaremill/elasticmq-native
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi

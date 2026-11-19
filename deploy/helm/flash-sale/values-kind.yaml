@@ -1,0 +1,12 @@
+# Overrides for the local kind cluster.
+
+image:
+  tag: sha-0ec4c76      # replace with the tag CI published, for example sha-1f04516
+
+api:
+  service:
+    type: NodePort
+    nodePort: 30080       # matches extraPortMappings in deploy/kind/kind-config.yaml
+
+hpa:
+  maxReplicas: 6          # a laptop also runs k6, so cap the pod count

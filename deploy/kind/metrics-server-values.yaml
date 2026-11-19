@@ -1,0 +1,4 @@
+# metrics-server on kind needs this flag: kind kubelets use self-signed certificates.
+# Local cluster only. Do not copy this to EKS.
+args:
+  - --kubelet-insecure-tls
