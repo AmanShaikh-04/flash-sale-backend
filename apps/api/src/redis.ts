@@ -29,3 +29,33 @@ export async function reserve(idempotencyKey: string): Promise<ReserveResult> {
     idemTtlSec
   );
 }
+
+// Release: only if the reservation still exists, so stock is returned exactly once.
+const RELEASE_LUA = `
+if redis.call('ZREM', KEYS[2], ARGV[1]) == 1 then
+  redis.call('INCR', KEYS[1])
+  redis.call('DEL', KEYS[3])
+  return 1
+end
+return 0
+`;
+
+// Confirm: only if the reservation is still alive (not expired or released).
+const CONFIRM_LUA = `
+if redis.call('ZREM', KEYS[1], ARGV[1]) == 1 then
+  redis.call('SET', KEYS[2], 'CONFIRMED', 'EX', ARGV[2])
+  return 1
+end
+return 0
+`;
+
+redis.defineCommand('release', { numberOfKeys: 3, lua: RELEASE_LUA });
+redis.defineCommand('confirm', { numberOfKeys: 2, lua: CONFIRM_LUA });
+
+export async function release(idempotencyKey: string): Promise<boolean> {
+  return (await (redis as any).release('stock', 'reservations', `idem:${idempotencyKey}`, idempotencyKey)) === 1;
+}
+
+export async function confirm(idempotencyKey: string): Promise<boolean> {
+  return (await (redis as any).confirm('reservations', `idem:${idempotencyKey}`, idempotencyKey, 3600)) === 1;
+}
