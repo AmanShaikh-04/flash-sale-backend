@@ -1,6 +1,9 @@
 import Fastify from 'fastify';
 import { redis, reserve, release, confirm } from './redis';
 import { fakePayment } from './payment';
+import { createSqsQueue } from '@flash/shared';
+
+const queuePromise = createSqsQueue();
 
 const app = Fastify();
 
@@ -23,8 +26,11 @@ app.post('/buy', async (req, reply) => {
     return reply.code(402).send({ status: 'payment_failed' });
   }
 
-  const confirmed = await confirm(idempotencyKey);
+    const confirmed = await confirm(idempotencyKey);
   if (!confirmed) return reply.code(410).send({ status: 'reservation_expired' });
+
+  const queue = await queuePromise;
+  await queue.publish({ userId, idempotencyKey });
   return reply.code(200).send({ status: 'confirmed' });
 });
 

@@ -1,0 +1,9 @@
+{
+  "name": "@flash/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1172.0"
+  }
+}
