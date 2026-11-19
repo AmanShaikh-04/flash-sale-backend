@@ -36,6 +36,17 @@ app.post('/buy', async (req, reply) => {
 
 app.get('/stock', async () => ({ stock: Number(await redis.get('stock')) }));
 
+// Kubernetes probes. Liveness: the process is up. Readiness: Redis answers.
+app.get('/healthz', async () => ({ ok: true }));
+app.get('/readyz', async (_req, reply) => {
+  try {
+    await redis.ping();
+    return { ok: true };
+  } catch {
+    return reply.code(503).send({ ok: false });
+  }
+});
+
 // Reaper: return stock for reservations that expired without payment.
 setInterval(async () => {
   try {
@@ -45,5 +56,12 @@ setInterval(async () => {
     console.error('reaper error', e);
   }
 }, 1000);
+
+// On SIGTERM (HPA scale-down, rollout) stop taking new requests and finish the ones in flight.
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, draining');
+  await app.close();
+  process.exit(0);
+});
 
 app.listen({ port: 3000, host: '0.0.0.0' }).then(() => console.log('API on :3000'));
