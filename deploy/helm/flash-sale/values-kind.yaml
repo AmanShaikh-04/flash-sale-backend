@@ -9,4 +9,4 @@ api:
     nodePort: 30080       # matches extraPortMappings in deploy/kind/kind-config.yaml
 
 hpa:
-  maxReplicas: 4          # a laptop also runs k6, so cap the pod count
+  maxReplicas: 6          # a laptop also runs k6, so cap the pod count
