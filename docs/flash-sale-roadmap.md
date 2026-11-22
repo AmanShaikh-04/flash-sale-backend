@@ -1,6 +1,6 @@
 # Flash-Sale Backend: Phased Roadmap
 
-Last updated: 20 Nov 2026
+Last updated: 22 Nov 2026
 
 **Goal:** prove the backend handles **1 million requests with no overselling**.
 **Rule of thumb:** finish each phase's exit criteria before starting the next. CORE items are mandatory. KEEP items are built if time allows, otherwise use the fallback.
@@ -13,9 +13,9 @@ Last updated: 20 Nov 2026
 |---|---|---|---|---|---|
 | 0 | Prep and decisions | Laptop + AWS console | $0 | Accounts, budget alert, quota check | Done (quota approval pending) |
 | 1 | Core app, local | Docker Compose (infra) + host | $0 | `/buy` works with zero oversell locally | **Done** |
-| 2 | CI/CD and images | GitHub Actions | $0 | Every push builds and tests images | **Next** |
-| 3 | Kubernetes, local | kind / k3d | $0 | Helm, HPA and Argo CD working | Not started |
-| 4 | Terraform + AWS smoke test | AWS (hours) | Low | 50-100k requests pass, then destroy | Not started |
+| 2 | CI/CD and images | GitHub Actions | $0 | Every push builds and tests images | **Done** |
+| 3 | Kubernetes, local | kind | $0 | Helm, HPA and Argo CD working | **Done** |
+| 4 | Terraform + AWS smoke test | AWS (hours) | Low | 50-100k requests pass, then destroy | **Next** |
 | 5 | Edge, security, payments | AWS | Low | Full request path hardened | Not started |
 | 6 | Observability | Local + AWS | Low | Dashboards ready for evidence | Not started |
 | 7 | Dress rehearsal and pre-flight | AWS | Moderate | Final-run checklist all green | Not started |
@@ -90,17 +90,17 @@ Run 3: 0% failed requests, about 4,170 requests/s, p95 about 161 ms, 2,556 faile
 
 **Exit criteria (met):** a push to `main` produces tested, tagged images automatically.
 
-## Phase 3: Kubernetes on a local cluster (NEXT)
+## Phase 3: Kubernetes on a local cluster (DONE)
 
 **Objective:** prove the K8s setup at zero cost before touching AWS.
 
-- [ ] Run the stack on kind or k3d: app, worker, Redis (in-cluster), Postgres, queue (SQS emulator)
-- [ ] **HPA** (CORE): confirm pods scale up under k6 load
-- [ ] Helm charts (KEEP, fallback: plain manifests)
-- [ ] Argo CD (KEEP, fallback: deploy from CI)
-- [ ] Kubernetes secrets (the Secrets Manager fallback)
+- [x] Run the stack on kind: app, worker, Redis (in-cluster), Postgres, queue (SQS emulator). `verify.ts` passed on the cluster at 5,000, 400,000 and 600,000 requests.
+- [x] **HPA** (CORE): api scaled from 2 to 6 pods under k6 load (CPU reached 470% of request), then back to 2
+- [x] Helm charts (KEEP, fallback: plain manifests): `deploy/helm/flash-sale`, `helm lint` clean
+- [x] Argo CD (KEEP, fallback: deploy from CI): app Synced and Healthy. A merged change was applied with no deploy command, and a manual delete was self-healed.
+- [x] Kubernetes secrets (the Secrets Manager fallback): Secret `flash-sale-db`
 
-**Exit criteria:** `helm install` (or Argo sync) brings up the whole stack, and HPA scaling is visible during a local load test.
+**Exit criteria (met):** `helm install` (or Argo sync) brings up the whole stack, and HPA scaling is visible during a local load test. Numbers are in `docs/decisions.md` under "Phase 3 results".
 
 ---
 

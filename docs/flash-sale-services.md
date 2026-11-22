@@ -1,16 +1,20 @@
 # Flash-Sale Ticket / Sneaker Drop: Final Service List
 
-Last updated: 20 Nov 2026
+Last updated: 22 Nov 2026
 
 **Language:** Node.js (TypeScript) | **Region:** ap-south-1 (Mumbai) | **Starting stock:** N = 10,000
 
-## Build status (20 Nov 2026)
+## Build status (22 Nov 2026)
 
 **Built and verified locally (Phase 1):** Redis (atomic Lua stock, reservations, idempotency), PostgreSQL (orders), SQS API via ElasticMQ, dead-letter queue, idempotency keys, fake payment service, worker, k6 load test, verification script. Docker Compose runs Redis, Postgres and ElasticMQ.
 
-**Next (Phase 2):** Docker images for the app and worker, GitHub Actions, GHCR.
+**Built and verified (Phase 2):** Docker images for the api and worker, GitHub Actions (check, smoke, publish), images on GHCR.
 
-**Not started:** everything else (Kubernetes, Terraform, AWS services, edge layers, observability).
+**Built and verified (Phase 3):** Kubernetes on kind, a Helm chart (api, worker, Redis, Postgres, ElasticMQ, HPA, Secret), metrics-server, Argo CD deploying from `main`.
+
+**Next (Phase 4):** Terraform, EKS, RDS, SQS, ECR and the AWS smoke test.
+
+**Not started:** everything else (Terraform, AWS services, edge layers, observability).
 
 ## Foundation
 - Terraform CLI with an S3 backend (IaC, no HCP Terraform)
@@ -79,8 +83,8 @@ Last updated: 20 Nov 2026
 
 ## Build Order
 1. Core locally with Docker Compose (app, Redis, Postgres, SQS emulator) **(done)**
-2. Docker images and CI/CD **(next)**
-3. Kubernetes + Helm + Argo CD
+2. Docker images and CI/CD **(done)**
+3. Kubernetes + Helm + Argo CD **(done)**
 4. Terraform + cloud services
 5. Edge, security and payments
 6. Observability

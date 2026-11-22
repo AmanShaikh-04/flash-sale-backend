@@ -1,11 +1,13 @@
 # Flash-Sale Backend: Project Overview
 
-Last updated: 20 Nov 2026
+Last updated: 22 Nov 2026
 
 ## Progress
 - Phase 0 (prep): done, except the pending EC2 vCPU quota approval.
 - Phase 1 (core app, local): **done**. 50,000 requests, exactly 10,000 confirmed orders, no overselling, no duplicates, queue and DLQ empty. See `docs/decisions.md` for the numbers.
-- Next: Phase 2 (Dockerfiles, GitHub Actions, GHCR). Full plan in `docs/flash-sale-roadmap.md`.
+- Phase 2 (containers and CI/CD): **done**. Dockerfile, GitHub Actions (check, smoke, publish), images on GHCR.
+- Phase 3 (local Kubernetes): **done**. Helm chart on kind, HPA scaled the api from 2 to 6 pods under load, Argo CD deploys from `main`, `verify.ts` passed on the cluster.
+- Next: Phase 4 (Terraform and the AWS smoke test). Full plan in `docs/flash-sale-roadmap.md`.
 
 ## 1. Goal
 
@@ -161,8 +163,8 @@ A 48-hour window is about $50, and the 1M-request test itself adds only a few do
 ## 7. Build and run plan
 
 1. **Local first:** core on Docker Compose infra (Redis, Postgres, SQS emulator) with the app and worker on the host. Cost: $0. **Done.**
-2. **Containers and CI/CD:** Dockerfiles, GitHub Actions, GHCR. Cost: $0. **Next.**
-3. **Local Kubernetes:** Kubernetes, Helm and Argo CD on a local cluster (kind or k3d). Cost: $0.
+2. **Containers and CI/CD:** Dockerfiles, GitHub Actions, GHCR. Cost: $0. **Done.**
+3. **Local Kubernetes:** Kubernetes, Helm and Argo CD on a local kind cluster. Cost: $0. **Done.**
 4. **AWS smoke test:** bring the stack up with Terraform for a couple of hours, run 50-100k requests, fix problems, then destroy.
 5. **Edge, security and payments:** add WAF, CloudFront, queue and payments as time allows.
 6. **Observability:** Prometheus, Grafana, and the optional tracing, logging and alerting tools.
