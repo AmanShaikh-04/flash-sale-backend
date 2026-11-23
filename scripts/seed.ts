@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { Pool } from 'pg';
-import { SQSClient, PurgeQueueCommand } from '@aws-sdk/client-sqs';
+import { PurgeQueueCommand } from '@aws-sdk/client-sqs';
+import { createSqsClient } from '@flash/shared';
 
 const N = Number(process.env.STOCK ?? 10000);
 const base = process.env.SQS_BASE ?? 'http://localhost:9324/000000000000';
@@ -10,11 +11,7 @@ async function main() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL ?? 'postgres://flash:flash@localhost:5432/flashsale',
   });
-  const sqs = new SQSClient({
-    region: 'ap-south-1',
-    endpoint: 'http://localhost:9324',
-    credentials: { accessKeyId: 'x', secretAccessKey: 'x' },
-  });
+  const sqs = createSqsClient();
 
   await redis.flushall();
   await redis.set('stock', N);

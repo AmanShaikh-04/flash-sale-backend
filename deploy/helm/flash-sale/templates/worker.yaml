@@ -21,6 +21,10 @@ spec:
           env:
             - name: SQS_ENDPOINT
               value: {{ include "fs.sqsEndpoint" . | quote }}
+            {{- if .Values.config.sqsQueueUrl }}
+            - name: SQS_QUEUE_URL
+              value: {{ .Values.config.sqsQueueUrl | quote }}
+            {{- end }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
