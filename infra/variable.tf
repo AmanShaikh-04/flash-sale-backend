@@ -25,7 +25,7 @@ variable "node_instance_type" {
 
 variable "app_node_count" {
   type    = number
-  default = 1
+  default = 2
 }
 
 variable "loadgen_node_count" {
