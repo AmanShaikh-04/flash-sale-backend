@@ -25,3 +25,7 @@ output "orders_queue_arn" {
 output "orders_dlq_arn" {
   value = aws_sqs_queue.orders_dlq.arn
 }
+
+output "cluster_name" {
+  value = module.eks.cluster_name
+}
