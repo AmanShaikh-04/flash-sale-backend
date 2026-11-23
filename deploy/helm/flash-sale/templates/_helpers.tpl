@@ -4,8 +4,13 @@
 {{- default "redis://redis:6379" .Values.config.redisUrl -}}
 {{- end -}}
 
+{{/* Empty string = real AWS SQS. Fall back to ElasticMQ only when it is enabled. */}}
 {{- define "fs.sqsEndpoint" -}}
-{{- default "http://elasticmq:9324" .Values.config.sqsEndpoint -}}
+{{- if .Values.config.sqsEndpoint -}}
+{{- .Values.config.sqsEndpoint -}}
+{{- else if .Values.elasticmq.enabled -}}
+http://elasticmq:9324
+{{- end -}}
 {{- end -}}
 
 {{- define "fs.databaseUrl" -}}

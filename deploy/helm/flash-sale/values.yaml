@@ -10,6 +10,7 @@ config:
   redisUrl: ""
   databaseUrl: ""
   sqsEndpoint: ""
+  sqsQueueUrl: ""         # AWS only: URL of the Terraform-created orders queue
 
 api:
   image: ghcr.io/amanshaikh-04/flash-sale-api
