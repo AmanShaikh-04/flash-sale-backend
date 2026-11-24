@@ -16,6 +16,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY packages/shared ./packages/shared
+COPY scripts ./scripts
+COPY db ./db
 
 # ---- api ----
 FROM base AS api
