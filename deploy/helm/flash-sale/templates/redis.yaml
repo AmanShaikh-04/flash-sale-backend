@@ -15,6 +15,11 @@ spec:
       labels:
         app: redis
     spec:
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
       containers:
         - name: redis
           image: {{ .Values.redis.image }}

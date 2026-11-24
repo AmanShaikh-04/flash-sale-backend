@@ -1,0 +1,33 @@
+# Overrides for EKS. The database URL is NOT stored here:
+# pass it at install time with --set-string config.databaseUrl=...
+
+image:
+  tag: sha-e905b33
+
+api:
+  image: 474874559122.dkr.ecr.ap-south-1.amazonaws.com/flash-sale-api
+  service:
+    type: ClusterIP
+
+worker:
+  image: 474874559122.dkr.ecr.ap-south-1.amazonaws.com/flash-sale-worker
+
+nodeSelector:
+  role: app
+
+ingress:
+  enabled: true
+
+# RDS and real SQS replace these. Redis stays in the cluster.
+postgres:
+  enabled: false
+elasticmq:
+  enabled: false
+
+config:
+  sqsEndpoint: ""     # empty = real AWS SQS
+  sqsQueueUrl: "https://sqs.ap-south-1.amazonaws.com/474874559122/orders"
+
+# A first guess. The real cap gets measured in the smoke test.
+hpa:
+  maxReplicas: 8

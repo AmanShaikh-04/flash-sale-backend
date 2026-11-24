@@ -80,3 +80,16 @@ elasticmq:
     limits:
       cpu: "1"
       memory: 512Mi
+
+
+
+# Pod identity: the Terraform role from Step 8 is attached to this ServiceAccount name.
+serviceAccount:
+  name: flash-sale
+
+# Schedule app pods on matching nodes only. Empty = anywhere (kind).
+nodeSelector: {}
+
+# AWS: creates an internet-facing ALB through the AWS Load Balancer Controller.
+ingress:
+  enabled: false
