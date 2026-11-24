@@ -1,0 +1,43 @@
+# Load generator. Runs on the tainted loadgen node, separate from the app nodes.
+# __BASE_URL__, __TOTAL__, __VUS__ and __RUN__ are replaced by the run command.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        role: loadgen
+      tolerations:
+        - key: role
+          operator: Equal
+          value: loadgen
+          effect: NoSchedule
+      containers:
+        - name: k6
+          image: grafana/k6
+          args: ["run", "/scripts/k6-buy.js"]
+          env:
+            - name: BASE_URL
+              value: "__BASE_URL__"
+            - name: TOTAL
+              value: "__TOTAL__"
+            - name: VUS
+              value: "__VUS__"
+            - name: RUN
+              value: "__RUN__"
+          resources:
+            requests:
+              cpu: "1500m"
+              memory: 512Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: k6-script
